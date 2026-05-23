@@ -1,0 +1,532 @@
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { 
+  Grid, 
+  Utensils, 
+  Home as HomeIcon, 
+  Sparkles, 
+  Cpu, 
+  TrendingUp, 
+  CheckCircle2, 
+  Package, 
+  Clock, 
+  ChevronRight, 
+  ArrowLeft, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Award,
+  BookOpen,
+  DollarSign,
+  Layers,
+  HelpCircle,
+  ShieldCheck,
+  Check,
+  Facebook,
+  Instagram,
+  Twitter
+} from 'lucide-react';
+
+import { PRODUCTS, CATEGORIES } from './data';
+import { Product, CartItem, CheckoutDetails } from './types';
+
+// Importing custom components safely
+import Header, { AppTab } from './components/Header';
+import ProductCard from './components/ProductCard';
+import ProductDetail from './components/ProductDetail';
+import Cart from './components/Cart';
+import Checkout from './components/Checkout';
+import RebatePortal from './components/RebatePortal';
+import AboutUs from './components/AboutUs';
+import ContactUs from './components/ContactUs';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsAndConditions from './components/TermsAndConditions';
+import RefundPolicy from './components/RefundPolicy';
+import ShippingDelivery from './components/ShippingDelivery';
+import Returns from './components/Returns';
+
+export default function App() {
+  const [currentTab, setTab] = useState<AppTab>('shop');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Selected product for individual specs view
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  
+  // Persistent shopping cart state
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    const cached = localStorage.getItem('mamazon_basket');
+    return cached ? JSON.parse(cached) : [];
+  });
+  
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutMode, setIsCheckoutMode] = useState(false);
+  const [orderedDetails, setOrderedDetails] = useState<CheckoutDetails | null>(null);
+
+  // Sync cart shifts into browser memory
+  useEffect(() => {
+    localStorage.setItem('mamazon_basket', JSON.stringify(cartItems));
+  }, [cartItems]);
+
+  const handleUpdateQty = (productId: string, quantity: number, selectedColor?: string) => {
+    setCartItems(prev => {
+      return prev.map(item => {
+        if (item.product.id === productId && (!selectedColor || item.selectedColor === selectedColor)) {
+          return { ...item, quantity: Math.max(1, quantity) };
+        }
+        return item;
+      });
+    });
+  };
+
+  const handleRemoveItem = (productId: string, selectedColor?: string) => {
+    setCartItems(prev => prev.filter(item => 
+      !(item.product.id === productId && (!selectedColor || item.selectedColor === selectedColor))
+    ));
+  };
+
+  const handleAddToCart = (product: Product, quantity: number = 1, selectedColor?: string) => {
+    setCartItems(prev => {
+      const existsIdx = prev.findIndex(item => 
+        item.product.id === product.id && 
+        (!selectedColor || item.selectedColor === selectedColor)
+      );
+
+      if (existsIdx > -1) {
+        const next = [...prev];
+        next[existsIdx] = {
+          ...next[existsIdx],
+          quantity: next[existsIdx].quantity + quantity
+        };
+        return next;
+      }
+
+      return [...prev, { product, quantity, selectedColor }];
+    });
+    
+    // Auto trigger basket notifications slider
+    setIsCartOpen(true);
+  };
+
+  const handleQuickAddToCart = (product: Product, event: React.MouseEvent) => {
+    event.stopPropagation();
+    handleAddToCart(product, 1, product.colors && product.colors.length > 0 ? product.colors[0] : undefined);
+  };
+
+  const handleOrderSuccess = (details: CheckoutDetails) => {
+    setOrderedDetails(details);
+    // Erase basket items upon successful transaction completion
+    setCartItems([]);
+  };
+
+  const resetAllShoppingModes = () => {
+    setOrderedDetails(null);
+    setIsCheckoutMode(false);
+    setIsCartOpen(false);
+    setActiveProduct(null);
+    setTab('shop');
+  };
+
+  // Helper utility to pair custom category icons safely
+  const renderCategoryIcon = (id: string) => {
+    switch (id) {
+      case 'all': return <Grid className="w-4 h-4" />;
+      case 'kitchen': return <Utensils className="w-4 h-4" />;
+      case 'home': return <HomeIcon className="w-4 h-4" />;
+      case 'beauty': return <Sparkles className="w-4 h-4" />;
+      case 'electronics': return <Cpu className="w-4 h-4" />;
+      default: return <Grid className="w-4 h-4" />;
+    }
+  };
+
+  // Filter models list
+  const filteredProducts = PRODUCTS.filter(prod => {
+    const matchCat = selectedCategory === 'all' || prod.category === selectedCategory;
+    const matchSearch = prod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        prod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        prod.category.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+
+  return (
+    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-900">
+      
+      {/* Header navbar layout controls */}
+      <Header
+        currentTab={currentTab}
+        setTab={(tab) => {
+          setTab(tab);
+          // Close slides if tab swaps
+          setIsCartOpen(false);
+          setIsCheckoutMode(false);
+          setActiveProduct(null);
+        }}
+        cartCount={cartCount}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onCartClick={() => {
+          setIsCartOpen(true);
+          setIsCheckoutMode(false);
+          setActiveProduct(null);
+        }}
+      />
+
+      {/* Main Container Core Viewport switcher */}
+      <main className="flex-1">
+        
+        {/* VIEW 1: Order Checkout Receipt Dashboard (Overriding other views upon completion) */}
+        {orderedDetails ? (
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center text-slate-800"
+          >
+            <div className="bg-white border border-slate-100 rounded-3xl shadow-xl p-8 sm:p-12 space-y-8">
+              <div className="w-20 h-20 bg-emerald-100 border-4 border-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                <CheckCircle2 className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">Transaction Approved!</h2>
+                <p className="text-slate-500 text-xs sm:text-sm font-medium">
+                  We've emailed your invoice receipt details to <span className="font-bold text-slate-900">{orderedDetails.email}</span>
+                </p>
+                <p className="text-slate-400 text-xs font-mono">
+                  Transit tracking reference: MZ-{Math.floor(1000000 + Math.random() * 9000000)}
+                </p>
+              </div>
+
+              {/* Transit progression step slider bar */}
+              <div className="grid grid-cols-4 gap-2 border-y border-slate-50 py-6 text-slate-500 text-[10px] sm:text-xs">
+                <div className="text-center space-y-1">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-[10px]">1</div>
+                  <span className="font-bold text-slate-900 block">Ordered</span>
+                  <span className="text-[9px] text-slate-400 font-mono">Processed</span>
+                </div>
+                <div className="text-center space-y-1">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-[10px]">2</div>
+                  <span className="font-bold text-slate-900 block">Packed</span>
+                  <span className="text-[9px] text-zinc-400 font-mono">Amazon WH</span>
+                </div>
+                <div className="text-center space-y-1">
+                  <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center mx-auto text-[10px] animate-pulse">3</div>
+                  <span className="font-bold text-slate-950 block">In Transit</span>
+                  <span className="text-[9px] text-amber-600 font-mono">By Tomorrow</span>
+                </div>
+                <div className="text-center space-y-1 opacity-50">
+                  <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center mx-auto text-[10px]">4</div>
+                  <span className="font-bold block">Delivered</span>
+                  <span className="text-[9px] text-slate-400 font-mono">Prime Service</span>
+                </div>
+              </div>
+
+              {/* Delivery specifications */}
+              <div className="bg-slate-50 rounded-2xl p-6 text-left space-y-4 text-xs sm:text-sm">
+                <h4 className="font-bold text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-1.5 uppercase tracking-wide text-xs">
+                  <Package className="w-4 h-4 text-amber-500" />
+                  Courier Delivery Summary
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider block">Recipient</span>
+                    <span className="font-bold text-slate-800 text-xs sm:text-sm block">{orderedDetails.fullName}</span>
+                    <span className="text-slate-500 text-xs block">{orderedDetails.phone}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-slate-400 font-mono font-bold uppercase tracking-wider block">Destination Address</span>
+                    <span className="text-slate-600 text-xs sm:text-sm block leading-normal">
+                      {orderedDetails.addressLine1}, {orderedDetails.addressLine2 ? `${orderedDetails.addressLine2}, ` : ''} 
+                      {orderedDetails.city}, {orderedDetails.state} {orderedDetails.postalCode}, {orderedDetails.country}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action layout */}
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <button
+                  onClick={resetAllShoppingModes}
+                  className="w-full sm:flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm rounded-xl transition-all cursor-pointer"
+                >
+                  Browse Store Catalog
+                </button>
+                <button
+                  onClick={() => {
+                    setOrderedDetails(null);
+                    setTab('rebate');
+                  }}
+                  className="w-full sm:flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md shadow-amber-500/10 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Award className="w-4 h-4 text-slate-900" />
+                  Submit Order Cashback!
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : isCartOpen ? (
+          /* VIEW 2: Dynamic Basket Pages (Subdivided into Cart details and Checkout fields) */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-4"
+          >
+            {isCheckoutMode ? (
+              <Checkout
+                cartItems={cartItems}
+                onBackToCart={() => setIsCheckoutMode(false)}
+                onOrderSuccess={handleOrderSuccess}
+              />
+            ) : (
+              <Cart
+                cartItems={cartItems}
+                onUpdateQty={handleUpdateQty}
+                onRemoveItem={handleRemoveItem}
+                onCheckout={() => setIsCheckoutMode(true)}
+                onKeepShopping={() => setIsCartOpen(false)}
+              />
+            )}
+          </motion.div>
+        ) : activeProduct ? (
+          /* VIEW 3: Dedicated facts sheets details sliders */
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="py-4"
+          >
+            <ProductDetail
+              product={activeProduct}
+              onBack={() => setActiveProduct(null)}
+              onAddToCart={(prod, qty, color) => {
+                handleAddToCart(prod, qty, color);
+              }}
+            />
+          </motion.div>
+        ) : currentTab === 'rebate' ? (
+          /* VIEW 4: VIP Hub Order verification templates */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-4"
+          >
+            <RebatePortal
+              products={PRODUCTS}
+              onBackToCatalog={() => setTab('shop')}
+            />
+          </motion.div>
+        ) : currentTab === 'about' ? (
+          <AboutUs onBackToCatalog={resetAllShoppingModes} onContactClick={() => setTab('contact')} />
+        ) : currentTab === 'contact' ? (
+          <ContactUs onBackToCatalog={resetAllShoppingModes} />
+        ) : currentTab === 'privacy' || currentTab === 'policies' ? (
+          <PrivacyPolicy onBackToCatalog={resetAllShoppingModes} onContactClick={() => setTab('contact')} />
+        ) : currentTab === 'terms' ? (
+          <TermsAndConditions onBackToCatalog={resetAllShoppingModes} onContactClick={() => setTab('contact')} />
+        ) : currentTab === 'refund' ? (
+          <RefundPolicy onBackToCatalog={resetAllShoppingModes} onContactClick={() => setTab('contact')} />
+        ) : currentTab === 'shipping' ? (
+          <ShippingDelivery onBackToCatalog={resetAllShoppingModes} onContactClick={() => setTab('contact')} />
+        ) : currentTab === 'returns' ? (
+          /* VIEW 8: Product Return and 30-day money back guarantee */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-4"
+          >
+            <Returns onBackToCatalog={resetAllShoppingModes} />
+          </motion.div>
+        ) : (
+          /* VIEW 8: Default Retail Catalog Storefront layout */
+          <div className="space-y-10 pb-16">
+            
+            {/* Promo hero board Carousel section banner */}
+            <div className="bg-white border-b border-slate-100 pt-6 pb-12">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="relative bg-slate-900 rounded-3xl overflow-hidden p-6 sm:p-12 md:p-16 text-white shadow-xl min-h-[360px] flex items-center">
+                  {/* Decorative background overlay */}
+                  <div className="absolute inset-0 bg-radial-[circle_at_right_top,_var(--tw-gradient-stops)] from-amber-500/10 via-slate-950 to-slate-950"></div>
+                  
+                  <div className="relative z-10 max-w-xl space-y-4 sm:space-y-6">
+                    <span className="text-amber-400 text-xs font-mono font-bold tracking-widest uppercase bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full inline-block">
+                      🔥 Prime Summer Direct Warehouse Clearance
+                    </span>
+                    <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight font-sans leading-tight">
+                      Factory Direct Deals <br className="hidden sm:inline" />
+                      Meet <span className="text-amber-500">VIP CashBack</span>.
+                    </h2>
+                    <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                      Shop our exclusive catalog of home appliances, silky bedding sets, advanced personal beauty wands, and accessories. Experience elite fast Prime shipping, certified high quality, and automated PayPal cashback claims.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3.5 pt-2">
+                      <a
+                        href="#products-list"
+                        className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs sm:text-sm px-5 py-3.5 rounded-xl shadow-md cursor-pointer transition-all"
+                      >
+                        Browse Amazon Catalog
+                      </a>
+                      <button
+                        onClick={() => setTab('rebate')}
+                        className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-xs sm:text-sm px-5 py-3.5 rounded-xl transition-all"
+                      >
+                        Claim order cashbacks
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Real-time category filtration navigation scroll block */}
+            <div id="products-list" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+              
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-slate-900 font-extrabold text-xl sm:text-2xl font-sans tracking-tight">MzAmazon Seller Exclusive Catalog</h3>
+                  <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Filter by lifestyle classifications or text search parameters.</p>
+                </div>
+
+                {/* Secondary list indicators */}
+                <div className="text-xs font-mono text-slate-400">
+                  Showing <span className="font-bold text-slate-800">{filteredProducts.length}</span> certified premium models
+                </div>
+              </div>
+
+              {/* Categorization chips */}
+              <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold tracking-tight transition-all duration-200 cursor-pointer ${
+                      selectedCategory === cat.id
+                        ? 'bg-slate-900 text-white shadow-md'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {renderCategoryIcon(cat.id)}
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid listings of filtered models */}
+              {filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {filteredProducts.map((prod) => (
+                    <ProductCard
+                      key={prod.id}
+                      product={prod}
+                      onViewDetails={(p) => setActiveProduct(p)}
+                      onAddToCart={handleQuickAddToCart}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white border rounded-3xl p-16 text-center space-y-4 max-w-md mx-auto shadow-xs">
+                  <span className="text-amber-500 text-4xl block font-mono">⚠️</span>
+                  <h4 className="text-slate-900 font-extrabold text-lg">No Matching Products</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    We couldn't locate any products matching "{searchQuery}" in our {selectedCategory} lists. Let's try adjusting your spelling or filters!
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                    }}
+                    className="px-4 py-2 bg-slate-900 hover:bg-amber-500 text-white font-bold text-xs rounded-xl"
+                  >
+                    Reset Filter Parameters
+                  </button>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* Structured elegant Footer banner - Luxe Black & Gold Design */}
+      <footer className="bg-slate-950 text-slate-400 text-xs font-medium py-12 border-t border-slate-900 font-sans">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 text-center sm:text-left">
+          
+          {/* Col 1: Brand Info */}
+          <div className="space-y-4">
+            <h4 className="text-white font-black text-sm tracking-widest uppercase bg-gradient-to-r from-amber-400 to-yellow-600 bg-clip-text text-transparent">
+              MzAmazonSeller
+            </h4>
+            <p className="leading-relaxed text-slate-500 text-xs font-normal">
+              The premier zero-cost testing & rebate aggregation club for high quality household models, electronics, appliances, wellness devices, and beauty wands. Fully legal and compliant.
+            </p>
+            {/* Social Media Placeholders */}
+            <div className="flex justify-center sm:justify-start gap-2.5 pt-2">
+              <a href="#" onClick={(e) => e.preventDefault()} className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all shadow-md">
+                <Facebook className="w-4 h-4 text-inherit" />
+              </a>
+              <a href="#" onClick={(e) => e.preventDefault()} className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all shadow-md">
+                <Instagram className="w-4 h-4 text-inherit" />
+              </a>
+              <a href="#" onClick={(e) => e.preventDefault()} className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all shadow-md">
+                <Twitter className="w-4 h-4 text-inherit" />
+              </a>
+            </div>
+          </div>
+
+          {/* Col 2: Navigation Links */}
+          <div className="space-y-4">
+            <h4 className="text-white font-bold text-[13px] tracking-wider uppercase">VIP Store Pages</h4>
+            <div className="flex flex-col gap-2.5 text-slate-400 font-semibold">
+              <button onClick={() => setTab('shop')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Prime Shop</button>
+              <button onClick={() => setTab('rebate')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">VIP Cashback Claims</button>
+              <button onClick={() => setTab('about')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">About Us</button>
+              <button onClick={() => setTab('contact')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Contact Us</button>
+              <button onClick={() => setTab('returns')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Product Returns Portal</button>
+            </div>
+          </div>
+
+          {/* Col 3: Legal Policy Links */}
+          <div className="space-y-4">
+            <h4 className="text-white font-bold text-[13px] tracking-wider uppercase">Store Policies</h4>
+            <div className="flex flex-col gap-2.5 text-slate-400 font-semibold">
+              <button onClick={() => setTab('privacy')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Privacy Policy</button>
+              <button onClick={() => setTab('terms')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Terms & Conditions</button>
+              <button onClick={() => setTab('refund')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Refund Policy</button>
+              <button onClick={() => setTab('shipping')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Shipping & Delivery</button>
+            </div>
+          </div>
+
+          {/* Col 4: Support Email Section */}
+          <div className="space-y-4">
+            <h4 className="text-white font-bold text-[13px] tracking-wider uppercase">Customer Support</h4>
+            <div className="space-y-3 text-slate-500 font-normal leading-relaxed text-xs">
+              <div className="space-y-0.5">
+                <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block font-mono">Direct Support Email</span>
+                <a href="mailto:serhatrodi4@gmail.com" className="text-amber-400 font-bold hover:underline select-all block mt-0.5">
+                  serhatrodi4@gmail.com
+                </a>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block font-mono">Support Hotline</span>
+                <a href="tel:+447426783731" className="text-white font-mono font-bold hover:text-amber-400 transition-colors block mt-0.5">
+                  +447426783731
+                </a>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block font-mono font-sans">Business Hours</span>
+                <p className="text-slate-400 text-[11px] leading-tight fn-normal">Mon - Sat: 9:00 AM - 8:00 PM (GMT)</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Copyright Section */}
+        <div className="border-t border-slate-900/80 mt-10 pt-6 text-center text-[11px] text-slate-600 font-mono tracking-tight max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          © 2026 MZ Amazon Seller Store & Palamede-EU Stores Ltd. All Rights Reserved. Fully optimized for high-performance moderation and secure payment compliance.
+        </div>
+      </footer>
+
+    </div>
+  );
+}
