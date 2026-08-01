@@ -63,10 +63,94 @@ export default function App() {
   const [isCheckoutMode, setIsCheckoutMode] = useState(false);
   const [orderedDetails, setOrderedDetails] = useState<CheckoutDetails | null>(null);
 
+  // Synchronize state with browser URL (search params)
+  useEffect(() => {
+    const handleUrlSync = () => {
+      const params = new URLSearchParams(window.location.search);
+      const prodId = params.get('product') || params.get('p');
+      const tabParam = params.get('tab') as AppTab | null;
+
+      if (prodId) {
+        const found = PRODUCTS.find(p => p.id === prodId);
+        if (found) {
+          setActiveProduct(found);
+          setIsCartOpen(false);
+          setIsCheckoutMode(false);
+          return;
+        }
+      }
+
+      setActiveProduct(null);
+
+      if (tabParam && ['shop', 'rebate', 'about', 'contact', 'privacy', 'policies', 'terms', 'refund', 'shipping', 'returns'].includes(tabParam)) {
+        setTab(tabParam);
+      } else {
+        setTab('shop');
+      }
+    };
+
+    handleUrlSync();
+
+    window.addEventListener('popstate', handleUrlSync);
+    return () => window.removeEventListener('popstate', handleUrlSync);
+  }, []);
+
   // Sync cart shifts into browser memory
   useEffect(() => {
     localStorage.setItem('mamazon_basket', JSON.stringify(cartItems));
   }, [cartItems]);
+
+  const handleOpenProduct = (product: Product) => {
+    setActiveProduct(product);
+    setIsCartOpen(false);
+    setIsCheckoutMode(false);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('product', product.id);
+    window.history.pushState({ productId: product.id }, '', url.toString());
+  };
+
+  const handleCloseProduct = () => {
+    setActiveProduct(null);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('product');
+    if (currentTab && currentTab !== 'shop') {
+      url.searchParams.set('tab', currentTab);
+    } else {
+      url.searchParams.delete('tab');
+    }
+    window.history.pushState({}, '', url.toString());
+  };
+
+  const handleSelectTab = (tab: AppTab) => {
+    setTab(tab);
+    setIsCartOpen(false);
+    setIsCheckoutMode(false);
+    setActiveProduct(null);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('product');
+    if (tab !== 'shop') {
+      url.searchParams.set('tab', tab);
+    } else {
+      url.searchParams.delete('tab');
+    }
+    window.history.pushState({ tab }, '', url.toString());
+  };
+
+  const resetAllShoppingModes = () => {
+    setOrderedDetails(null);
+    setIsCheckoutMode(false);
+    setIsCartOpen(false);
+    setActiveProduct(null);
+    setTab('shop');
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('product');
+    url.searchParams.delete('tab');
+    window.history.pushState({}, '', url.toString());
+  };
 
   const handleUpdateQty = (productId: string, quantity: number, selectedColor?: string) => {
     setCartItems(prev => {
@@ -119,14 +203,6 @@ export default function App() {
     setCartItems([]);
   };
 
-  const resetAllShoppingModes = () => {
-    setOrderedDetails(null);
-    setIsCheckoutMode(false);
-    setIsCartOpen(false);
-    setActiveProduct(null);
-    setTab('shop');
-  };
-
   // Helper utility to pair custom category icons safely
   const renderCategoryIcon = (id: string) => {
     switch (id) {
@@ -156,13 +232,7 @@ export default function App() {
       {/* Header navbar layout controls */}
       <Header
         currentTab={currentTab}
-        setTab={(tab) => {
-          setTab(tab);
-          // Close slides if tab swaps
-          setIsCartOpen(false);
-          setIsCheckoutMode(false);
-          setActiveProduct(null);
-        }}
+        setTab={handleSelectTab}
         cartCount={cartCount}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -242,6 +312,21 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+
+                <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">Payment Status:</span>
+                    <span className="bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-md text-[11px]">
+                      Bank Transfer Receipt Verified
+                    </span>
+                  </div>
+                  {orderedDetails.paymentScreenshot && (
+                    <div className="flex items-center gap-1.5 text-slate-600 text-xs font-medium">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Screenshot SS Received</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Action layout */}
@@ -297,7 +382,7 @@ export default function App() {
           >
             <ProductDetail
               product={activeProduct}
-              onBack={() => setActiveProduct(null)}
+              onBack={handleCloseProduct}
               onAddToCart={(prod, qty, color) => {
                 handleAddToCart(prod, qty, color);
               }}
@@ -312,7 +397,7 @@ export default function App() {
           >
             <RebatePortal
               products={PRODUCTS}
-              onBackToCatalog={() => setTab('shop')}
+              onBackToCatalog={() => handleSelectTab('shop')}
             />
           </motion.div>
         ) : currentTab === 'about' ? (
@@ -366,7 +451,7 @@ export default function App() {
                         Browse Amazon Catalog
                       </a>
                       <button
-                        onClick={() => setTab('rebate')}
+                        onClick={() => handleSelectTab('rebate')}
                         className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-xs sm:text-sm px-5 py-3.5 rounded-xl transition-all"
                       >
                         Claim order cashbacks
@@ -417,7 +502,7 @@ export default function App() {
                     <ProductCard
                       key={prod.id}
                       product={prod}
-                      onViewDetails={(p) => setActiveProduct(p)}
+                      onViewDetails={handleOpenProduct}
                       onAddToCart={handleQuickAddToCart}
                     />
                   ))}
@@ -477,11 +562,11 @@ export default function App() {
           <div className="space-y-4">
             <h4 className="text-white font-bold text-[13px] tracking-wider uppercase">VIP Store Pages</h4>
             <div className="flex flex-col gap-2.5 text-slate-400 font-semibold">
-              <button onClick={() => setTab('shop')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Prime Shop</button>
-              <button onClick={() => setTab('rebate')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">VIP Cashback Claims</button>
-              <button onClick={() => setTab('about')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">About Us</button>
-              <button onClick={() => setTab('contact')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Contact Us</button>
-              <button onClick={() => setTab('returns')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Product Returns Portal</button>
+              <button onClick={() => handleSelectTab('shop')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Prime Shop</button>
+              <button onClick={() => handleSelectTab('rebate')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">VIP Cashback Claims</button>
+              <button onClick={() => handleSelectTab('about')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">About Us</button>
+              <button onClick={() => handleSelectTab('contact')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Contact Us</button>
+              <button onClick={() => handleSelectTab('returns')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Product Returns Portal</button>
             </div>
           </div>
 
@@ -489,10 +574,10 @@ export default function App() {
           <div className="space-y-4">
             <h4 className="text-white font-bold text-[13px] tracking-wider uppercase">Store Policies</h4>
             <div className="flex flex-col gap-2.5 text-slate-400 font-semibold">
-              <button onClick={() => setTab('privacy')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Privacy Policy</button>
-              <button onClick={() => setTab('terms')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Terms & Conditions</button>
-              <button onClick={() => setTab('refund')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Refund Policy</button>
-              <button onClick={() => setTab('shipping')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Shipping & Delivery</button>
+              <button onClick={() => handleSelectTab('privacy')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Privacy Policy</button>
+              <button onClick={() => handleSelectTab('terms')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Terms & Conditions</button>
+              <button onClick={() => handleSelectTab('refund')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Refund Policy</button>
+              <button onClick={() => handleSelectTab('shipping')} className="text-left w-max mx-auto sm:mx-0 hover:text-amber-400 cursor-pointer transition-colors text-xs">Shipping & Delivery</button>
             </div>
           </div>
 

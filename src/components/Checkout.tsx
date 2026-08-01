@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CreditCard, Lock, CheckCircle2, ShoppingBag, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Upload, X, Image as ImageIcon, Building2, ShieldCheck, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import { CartItem, CheckoutDetails } from '../types';
 
 interface CheckoutProps {
@@ -19,14 +19,18 @@ export default function Checkout({ cartItems, onBackToCart, onOrderSuccess }: Ch
     state: '',
     postalCode: '',
     country: 'United States',
-    paymentMethod: 'card',
-    cardNumber: '',
-    cardExpiry: '',
-    cardCvv: '',
+    paymentMethod: 'bank_transfer',
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showBankModal, setShowBankModal] = useState(false);
+  
+  // Bank modal state
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [screenshotName, setScreenshotName] = useState<string>('');
+  const [modalError, setModalError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const subtotal = cartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   const tax = subtotal * 0.08;
@@ -37,34 +41,65 @@ export default function Checkout({ cartItems, onBackToCart, onOrderSuccess }: Ch
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenBankModal = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setErrorMessage('');
 
-    // Form Validations
+    // Form Validations for shipping address
     if (!formData.fullName || !formData.email || !formData.phone || !formData.addressLine1 || !formData.city || !formData.state || !formData.postalCode) {
-      setErrorMessage('Please complete all standard shipping address fields.');
+      setErrorMessage('Please complete all standard shipping address fields to proceed.');
       return;
     }
 
-    if (formData.paymentMethod === 'card') {
-      if (!formData.cardNumber || !formData.cardExpiry || !formData.cardCvv) {
-        setErrorMessage('Please provide complete credit card details.');
+    setShowBankModal(true);
+  };
+
+  const handleCopyText = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => {
+      setCopiedField(null);
+    }, 2000);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        setModalError('Please upload an image file (PNG, JPG, JPEG, WEBP).');
         return;
       }
+      setModalError('');
+      setScreenshotName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshot(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCompleteOrder = () => {
+    setModalError('');
+    if (!screenshot) {
+      setModalError('Please upload your payment transfer screenshot (SS) to verify order payment.');
+      return;
     }
 
     setIsSubmitting(true);
 
-    // Simulate safe server API call latency
     setTimeout(() => {
       setIsSubmitting(false);
-      onOrderSuccess(formData);
+      setShowBankModal(false);
+      onOrderSuccess({
+        ...formData,
+        paymentScreenshot: screenshot,
+      });
     }, 1500);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 font-sans">
       <button
         onClick={onBackToCart}
         className="inline-flex items-center text-sm font-semibold text-slate-500 hover:text-amber-500 transition-colors gap-2 cursor-pointer mb-6"
@@ -74,18 +109,18 @@ export default function Checkout({ cartItems, onBackToCart, onOrderSuccess }: Ch
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
-        {/* Left Column: Form Fields */}
-        <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6">
-          {/* Shipping Address Container */}
-          <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-2xl shadow-xs space-y-5">
-            <h3 className="text-lg font-bold font-sans text-slate-900 border-b border-slate-50 pb-3 flex items-center gap-2">
-              <span className="w-5 h-5 bg-amber-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center">1</span>
+        {/* Left Column: Shipping Address Form */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-slate-200/80 p-6 sm:p-8 rounded-2xl shadow-xs space-y-5">
+            <h3 className="text-lg font-bold font-sans text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <span className="w-6 h-6 bg-amber-500 rounded-full text-slate-950 text-xs font-black flex items-center justify-center">1</span>
               Prime Delivery Shipping Address
             </h3>
 
             {errorMessage && (
-              <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-xl text-rose-800 text-xs font-medium">
-                {errorMessage}
+              <div className="bg-rose-50 border-l-4 border-rose-500 p-4 rounded-r-xl text-rose-800 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMessage}</span>
               </div>
             )}
 
@@ -217,131 +252,27 @@ export default function Checkout({ cartItems, onBackToCart, onOrderSuccess }: Ch
             </div>
           </div>
 
-          {/* Payment Section */}
-          <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-2xl shadow-xs space-y-6">
-            <h3 className="text-lg font-bold font-sans text-slate-900 border-b border-slate-50 pb-3 flex items-center gap-2">
-              <span className="w-5 h-5 bg-amber-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center">2</span>
-              Secure Payment Section
-            </h3>
-
-            {/* Selector */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'card' }))}
-                className={`p-4 rounded-xl border-2 text-left flex items-center gap-3 transition-all ${
-                  formData.paymentMethod === 'card'
-                    ? 'border-amber-500 bg-amber-50/20 text-slate-900'
-                    : 'border-slate-100 bg-white hover:bg-slate-50 text-slate-600'
-                }`}
-              >
-                <CreditCard className="w-5 h-5" />
-                <div>
-                  <span className="text-xs font-bold block">Credit/Debit Card</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Stripe / Visa / Master</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, paymentMethod: 'external_pay' }))}
-                className={`p-4 rounded-xl border-2 text-left flex items-center gap-3 transition-all ${
-                  formData.paymentMethod === 'external_pay'
-                    ? 'border-amber-500 bg-amber-50/20 text-slate-900'
-                    : 'border-slate-100 bg-white hover:bg-slate-50 text-slate-600'
-                }`}
-              >
-                <ExternalLink className="w-5 h-5 text-amber-500 animate-pulse" />
-                <div>
-                  <span className="text-xs font-bold block">External Pay Link</span>
-                  <span className="text-[10px] text-amber-600 font-medium block mt-0.5">Click sandbox pay</span>
-                </div>
-              </button>
+          <div className="bg-amber-50/60 border border-amber-200/80 p-5 rounded-2xl flex items-center gap-3">
+            <Building2 className="w-6 h-6 text-amber-600 shrink-0" />
+            <div className="text-xs text-slate-700 leading-relaxed">
+              <span className="font-bold text-slate-900 block">Direct Bank Deposit Method</span>
+              Clicking <span className="font-bold text-amber-700">Pay & Complete Secure Order</span> will display our direct US bank details (Account Holder: <span className="font-bold text-slate-900">faran ahmed</span>) and upload input for transfer receipt screenshot.
             </div>
-
-            {/* Dynamic UI Content based on Payment Method */}
-            {formData.paymentMethod === 'card' ? (
-              <div className="space-y-4 pt-2">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">Card Number</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      name="cardNumber"
-                      placeholder="4000 1234 5678 9010"
-                      value={formData.cardNumber}
-                      onChange={handleInputChange}
-                      className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                    <CreditCard className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">Expiration Date</label>
-                    <input
-                      type="text"
-                      name="cardExpiry"
-                      placeholder="MM/YY"
-                      value={formData.cardExpiry}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">CVV / Security Code</label>
-                    <input
-                      type="password"
-                      name="cardCvv"
-                      placeholder="•••"
-                      maxLength={3}
-                      value={formData.cardCvv}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 pt-2 text-[10px] text-slate-400">
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>256-bit Secure Socket Layer SSL military grade encryption standards.</span>
-                </div>
-              </div>
-            ) : (
-              <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl space-y-3">
-                <h4 className="text-amber-800 font-bold text-xs font-sans">External Redirect Payment Link Trigger</h4>
-                <p className="text-slate-600 text-xs leading-relaxed">
-                  By selecting this option, you are directed to pay via the secure external checkout endpoint. Ideal for processing international currencies.
-                </p>
-                <a
-                  href="https://paypal.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-xs transition-colors"
-                >
-                  Pay on PayPal Sandbox
-                  <ExternalLink className="w-3 h-3 text-white" />
-                </a>
-              </div>
-            )}
           </div>
-        </form>
+        </div>
 
-        {/* Right Column: Checkout Sticky Card */}
-        <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-2xl space-y-5 lg:sticky lg:top-28">
+        {/* Right Column: Order Summary & Checkout Button */}
+        <div className="bg-slate-50 border border-slate-200/80 p-6 rounded-2xl space-y-5 lg:sticky lg:top-28 shadow-xs">
           <h3 className="text-slate-900 font-bold text-base font-sans uppercase tracking-wide">
             Your Purchase Summary
           </h3>
 
-          {/* Collapsed small cart item list */}
           <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 pr-1">
             {cartItems.map((item, idx) => (
               <div key={idx} className="py-2.5 flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 bg-white border rounded-md p-1 flex items-center justify-center shrink-0">
-                    <img src={item.product.image} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                  <div className="w-10 h-10 bg-white border border-slate-200 rounded-md p-1 flex items-center justify-center shrink-0">
+                    <img src={item.product.image} className="w-full h-full object-contain" referrerPolicy="no-referrer" alt={item.product.name} />
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-800 line-clamp-1">{item.product.name}</p>
@@ -379,26 +310,273 @@ export default function Checkout({ cartItems, onBackToCart, onOrderSuccess }: Ch
 
           <div className="pt-2">
             <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={`w-full inline-flex items-center justify-center p-3 BG-amber-500 ${
-                isSubmitting ? 'bg-amber-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-amber-500 cursor-pointer'
-              } text-white font-bold text-xs rounded-xl transition-all duration-200 shadow-md gap-2`}
+              type="button"
+              onClick={handleOpenBankModal}
+              className="w-full inline-flex items-center justify-center p-3.5 bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl transition-all duration-200 shadow-md gap-2 cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4 text-white" />
-              {isSubmitting ? 'Verifying Checkout Info...' : `PAY & COMLETE SECURE ORDER • $${total.toFixed(2)}`}
+              <CheckCircle2 className="w-4 h-4 text-amber-400 group-hover:text-slate-950" />
+              <span>PAY & COMPLETE SECURE ORDER • ${total.toFixed(2)}</span>
             </button>
             
             <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100/60 flex gap-2">
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <div className="text-[10px] text-emerald-700 leading-tight">
                 <span className="font-bold block">MzAmazon Trusted Escrow</span>
-                Refunds and transaction stability fully governed under standard buyer terms of service.
+                Bank transfer verified under standard buyer protection and instant cashbacks.
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* BANK DETAILS & SCREENSHOT UPLOAD MODAL */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative space-y-6 my-8">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 border border-amber-200/60 px-2.5 py-1 rounded-full inline-block mb-1">
+                  Direct Bank Transfer
+                </span>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Bank Payment Details</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Transfer exactly <span className="font-bold text-slate-900 font-mono">${total.toFixed(2)}</span> to the account below</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBankModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {modalError && (
+              <div className="bg-rose-50 border-l-4 border-rose-500 p-3.5 rounded-r-xl text-rose-800 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
+            {/* Bank Details List matching the Screenshot */}
+            <div className="space-y-4 text-slate-800 text-sm">
+              
+              {/* Account Holder Name */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Account holder name</span>
+                  <span className="font-extrabold text-slate-900 text-base">faran ahmed</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('faran ahmed', 'accountHolder')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy account holder name"
+                >
+                  {copiedField === 'accountHolder' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Account Number */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Account number</span>
+                  <span className="font-mono font-bold text-slate-900 text-base tracking-wide">30000002957351</span>
+                  <span className="text-xs font-bold text-rose-600 block mt-0.5">Min. deposit amount $2.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('30000002957351', 'accountNumber')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy account number"
+                >
+                  {copiedField === 'accountNumber' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Routing Number */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Routing number</span>
+                  <span className="font-mono font-bold text-slate-900 text-base tracking-wide">028000024</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('028000024', 'routingNumber')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy routing number"
+                >
+                  {copiedField === 'routingNumber' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Bank Name */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Bank (Based in US)</span>
+                  <span className="font-bold text-slate-900 text-sm">JP Morgan Chase NA</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('JP Morgan Chase NA', 'bankName')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy bank name"
+                >
+                  {copiedField === 'bankName' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Bank Address */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Bank address</span>
+                  <span className="font-semibold text-slate-900 text-xs leading-relaxed block max-w-xs">
+                    270 Park Avenue, New York, NY 10017
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('270 Park Avenue, New York, NY 10017', 'bankAddress')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy bank address"
+                >
+                  {copiedField === 'bankAddress' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+              {/* Account Type */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div>
+                  <span className="text-xs font-bold text-slate-400 block">Account type</span>
+                  <span className="font-semibold text-slate-900 text-sm">Checking (Current)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText('Checking (Current)', 'accountType')}
+                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Copy account type"
+                >
+                  {copiedField === 'accountType' ? (
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-4 h-4" /> Copied
+                    </span>
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+
+            </div>
+
+            {/* SCREENSHOT UPLOAD SECTION */}
+            <div className="bg-slate-50 border border-slate-200/80 p-5 rounded-2xl space-y-3">
+              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                <span>Upload Payment Screenshot (SS)</span>
+                <span className="text-rose-600 text-[10px] font-black">* Required</span>
+              </label>
+
+              {!screenshot ? (
+                <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 bg-white p-6 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors group text-center space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Click to upload transfer screenshot</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Supports PNG, JPG, JPEG, WEBP</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="bg-white border border-slate-200 p-3 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={screenshot} alt="Screenshot proof" className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">{screenshotName || 'Payment_Screenshot.png'}</p>
+                      <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Image attached
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScreenshot(null);
+                      setScreenshotName('');
+                    }}
+                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Remove attachment"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Complete Order Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleCompleteOrder}
+                disabled={isSubmitting}
+                className={`w-full py-4 px-6 ${
+                  isSubmitting ? 'bg-slate-700 cursor-not-allowed' : 'bg-slate-900 hover:bg-amber-500 hover:text-slate-950 cursor-pointer'
+                } text-white font-black text-sm rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                    <span>Verifying Screenshot & Placing Order...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 text-amber-400" />
+                    <span>Submit Screenshot & Complete Order</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

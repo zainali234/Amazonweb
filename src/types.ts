@@ -34,8 +34,6 @@ export interface CheckoutDetails {
   country: string;
   amazonProfileUrl?: string;
   paypalAccount?: string;
-  paymentMethod: 'card' | 'paypal' | 'bank_transfer' | 'external_pay';
-  cardNumber?: string;
-  cardExpiry?: string;
-  cardCvv?: string;
+  paymentMethod?: string;
+  paymentScreenshot?: string;
 }
